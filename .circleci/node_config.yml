@@ -1,0 +1,7 @@
+rest:
+  listen: 10.0.1.1:443
+  pkcs12: identity.p12
+bft:
+  constants:
+    t: 10
+  leaders:

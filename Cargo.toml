@@ -41,6 +41,7 @@ bytes = "0.4"
 lazy_static = "1.2.0"
 actix-net = "0.2.6"
 native-tls = "0.2.2"
+reqwest = "0.9.9"
 tokio-connect = { git = "https://github.com/carllerche/tokio-connect" }
 chain-core      = { path = "cardano-deps/chain-core" }
 chain-impl-mockchain = { path = "cardano-deps/chain-impl-mockchain" }
