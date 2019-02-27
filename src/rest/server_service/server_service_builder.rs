@@ -37,7 +37,8 @@ impl ServerServiceBuilder {
         F: Fn() -> App<S> + Send + Sync + Clone + 'static,
     {
         let prefix = self.prefix.clone();
-        let prefixed_handler = move || handler().prefix(&**prefix).boxed();
+        let prefixed_handler = move ||
+            handler().middleware(Cors::default()).prefix(&**prefix).boxed();
         self.handlers.push(Box::new(prefixed_handler));
         self
     }
