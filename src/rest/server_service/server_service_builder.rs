@@ -1,5 +1,6 @@
+use actix_web::middleware::cors::Cors;
 use actix_web::server::{HttpHandler, HttpHandlerTask};
-use actix_web::App;
+use actix_web::{http::{self, header}, pred, App, HttpResponse};
 use rest::server_service::{ServerResult, ServerService};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -20,6 +21,15 @@ impl ServerServiceBuilder {
             prefix: Arc::new(prefix.into()),
             handlers: vec![],
         }
+        .add_handler(|| {
+            Cors::for_app(App::new().filter(pred::Options()))
+                .send_wildcard()
+                .allowed_header(header::CONTENT_TYPE)
+                // catch all resourse in needed for the cors application
+                // that doesn't work with zero resources.
+                .resource("{path:.*}", |_| HttpResponse::Ok())
+                .register()
+        })
     }
 
     pub fn add_handler<F, S: 'static>(mut self, handler: F) -> Self
