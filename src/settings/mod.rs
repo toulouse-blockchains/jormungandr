@@ -7,6 +7,8 @@ pub enum Command {
     Start(start::Settings),
     Init(init::Settings),
     GenerateKeys,
+    DumpUtxos(command_arguments::DumpUtxosArguments),
+    CreateStakePool(command_arguments::CreateStakePoolArguments),
 }
 
 #[derive(Debug)]
@@ -32,6 +34,10 @@ impl Command {
                     .map_err(Error::Start)
             }
             command_arguments::Command::GenerateKeys => Ok(Command::GenerateKeys),
+            command_arguments::Command::DumpUtxos(options) => Ok(Command::DumpUtxos(options)),
+            command_arguments::Command::CreateStakePool(options) => {
+                Ok(Command::CreateStakePool(options))
+            }
         }
     }
 }

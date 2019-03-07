@@ -9,8 +9,9 @@
 //!
 
 pub use chain_core::property::{
-    Block, BlockDate, BlockId, Deserialize, FromStr, HasHeader, HasTransaction, Header,
-    LeaderSelection, Ledger, Serialize, Settings, Transaction, TransactionId, Update,
+    Block, BlockDate, BlockId, Deserialize, FromStr, HasHeader, HasMessages, HasTransaction,
+    Header, LeaderSelection, Ledger, Message, MessageId, Serialize, Settings, Transaction,
+    TransactionId, Update,
 };
 pub use network_core::gossip::Gossip;
 
@@ -21,6 +22,7 @@ use std::fmt::{Debug, Display};
 
 pub trait BlockConfig {
     type Block: Block<Id = Self::BlockHash, Date = Self::BlockDate>
+        + HasMessages<Message = Self::Message>
         + HasTransaction<Transaction = Self::Transaction>
         + HasHeader<Header = Self::BlockHeader>
         + Send;
@@ -31,7 +33,9 @@ pub trait BlockConfig {
         + Send
         + Sync
         + Debug;
-    type Transaction: Transaction<Id = Self::TransactionId> + Serialize + Send + Clone;
+    type Message: Message<Id = Self::MessageId> + Send + Clone;
+    type MessageId: MessageId + Serialize + Deserialize + Send;
+    type Transaction: Transaction<Id = Self::TransactionId> + Send + Clone;
     type TransactionId: TransactionId + Serialize + Deserialize + Send;
     type GenesisData;
 
@@ -48,6 +52,6 @@ pub trait BlockConfig {
         settings: &Self::Settings,
         ledger: &Self::Ledger,
         block_date: <Self::Block as Block>::Date,
-        transactions: Vec<Self::Transaction>,
+        messages: Vec<Self::Message>,
     ) -> Self::Block;
 }

@@ -1,16 +1,17 @@
 use std::sync::{mpsc::Receiver, Arc, RwLock};
 
-use crate::blockcfg::{BlockConfig, Ledger, Transaction};
+use crate::blockcfg::BlockConfig;
 use crate::blockchain::BlockchainR;
 use crate::intercom::{do_stream_reply, TransactionMsg};
 use crate::rest::v0::node::stats::StatsCounter;
 use crate::transaction::TPool;
+use chain_core::property::Message;
 
 #[allow(type_alias_bounds)]
-pub type TPoolR<B: BlockConfig> = Arc<RwLock<TPool<B::TransactionId, B::Transaction>>>;
+pub type TPoolR<B: BlockConfig> = Arc<RwLock<TPool<B::MessageId, B::Message>>>;
 
 pub fn transaction_task<B>(
-    blockchain: BlockchainR<B>,
+    _blockchain: BlockchainR<B>,
     tpool: TPoolR<B>,
     r: Receiver<TransactionMsg<B>>,
     stats_counter: StatsCounter,
@@ -30,8 +31,13 @@ where
             }
             TransactionMsg::SendTransaction(txs) => {
                 let mut tpool = tpool.write().unwrap();
-                let blockchain = blockchain.read().unwrap();
-                let chain_state = &blockchain.state.ledger.read().unwrap();
+                //let blockchain = blockchain.read().unwrap();
+                //let chain_state = &blockchain.state.ledger.read().unwrap();
+
+                // FIXME: need a way to test whether messages are
+                // applicable wrt the current chain state. Also, when
+                // creating a block, we need to handle the case where
+                // messages conflict which each other.
 
                 // this will test the transaction is valid within the current
                 // state of the local state of the global ledger.
@@ -39,10 +45,13 @@ where
                 // We don't want to keep transactions that are not valid within
                 // our state of the blockchain as we will not be able to add them
                 // in the blockchain.
+                /*
                 if let Err(error) = chain_state.diff(txs.iter()) {
-                    warn!("Received transactions where some are invalid, {}", error);
+                    warn!("Received some invalid messages: {}", error);
                 // TODO
-                } else {
+                } else
+                 */
+                {
                     stats_counter.add_tx_recv_cnt(txs.len());
                     for tx in txs {
                         tpool.add(tx.id(), tx);

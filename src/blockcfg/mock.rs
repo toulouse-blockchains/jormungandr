@@ -35,6 +35,8 @@ impl BlockConfig for Mockchain {
     type BlockDate = block::BlockDate;
     type BlockHash = key::Hash;
     type BlockHeader = block::Header;
+    type Message = block::message::Message;
+    type MessageId = block::message::MessageId;
     type Transaction = transaction::SignedTransaction;
     type TransactionId = transaction::TransactionId;
     type GenesisData = GenesisData;
@@ -52,16 +54,11 @@ impl BlockConfig for Mockchain {
         settings: &Self::Settings,
         _ledger: &Self::Ledger,
         block_date: Self::BlockDate,
-        transactions: Vec<Self::Transaction>,
+        messages: Vec<Self::Message>,
     ) -> Self::Block {
         use chain_core::property::Settings;
 
-        let content = block::BlockContents::new(
-            transactions
-                .into_iter()
-                .map(block::Message::Transaction)
-                .collect(),
-        );
+        let content = block::BlockContents::new(messages);
 
         let (content_hash, content_size) = content.compute_hash_size();
 

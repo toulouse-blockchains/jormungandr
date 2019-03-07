@@ -39,7 +39,7 @@ pub fn leadership_task<B>(
         if am_leader {
             // collect up to `nr_transactions` from the transaction pool.
             //
-            let transactions = transaction_pool.write().unwrap().collect(
+            let messages = transaction_pool.write().unwrap().collect(
                 b.state
                     .settings
                     .read()
@@ -48,8 +48,8 @@ pub fn leadership_task<B>(
             );
 
             info!(
-                "leadership create tpool={} transactions ({}.{})",
-                transactions.len(),
+                "leadership create block with {} messages ({}.{})",
+                messages.len(),
                 epoch.0,
                 idx
             );
@@ -59,7 +59,7 @@ pub fn leadership_task<B>(
                 &b.state.settings.read().unwrap(),
                 &b.state.ledger.read().unwrap(),
                 date,
-                transactions,
+                messages,
             );
 
             block_task.send_to(BlockMsg::LeadershipBlock(block));

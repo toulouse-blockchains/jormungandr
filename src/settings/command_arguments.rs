@@ -97,6 +97,18 @@ pub struct InitArguments {
 }
 
 #[derive(StructOpt, Debug)]
+pub struct DumpUtxosArguments {
+    #[structopt(long = "host", parse(try_from_str))]
+    pub host: String,
+}
+
+#[derive(StructOpt, Debug)]
+pub struct CreateStakePoolArguments {
+    #[structopt(long = "host", parse(try_from_str))]
+    pub host: String,
+}
+
+#[derive(StructOpt, Debug)]
 #[structopt(
     name = "jormungandr",
     raw(setting = "structopt::clap::AppSettings::ColoredHelp")
@@ -129,6 +141,15 @@ pub enum Command {
     /// itself as a participating node or not
     #[structopt(name = "generate-keys")]
     GenerateKeys,
+
+    // FIXME: commands below should probably be moved to cardano-cli eventually.
+    /// Dump UTxO state.
+    #[structopt(name = "dump-utxos")]
+    DumpUtxos(DumpUtxosArguments),
+
+    /// Create a stake pool.
+    #[structopt(name = "create-stake-pool")]
+    CreateStakePool(CreateStakePoolArguments),
 }
 
 impl CommandLine {

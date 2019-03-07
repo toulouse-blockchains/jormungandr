@@ -31,6 +31,8 @@ extern crate tower_service;
 extern crate tokio;
 extern crate tokio_bus;
 
+extern crate reqwest;
+
 #[cfg(test)]
 extern crate quickcheck;
 extern crate rand;
@@ -54,7 +56,7 @@ extern crate test;
 
 use std::sync::{mpsc::Receiver, Arc, Mutex, RwLock};
 
-use chain_impl_mockchain::transaction::{SignedTransaction, TransactionId};
+use chain_impl_mockchain::block::message::{Message, MessageId};
 use futures::Future;
 
 use blockcfg::{
@@ -77,6 +79,7 @@ pub mod blockchain;
 pub mod client;
 pub mod clock;
 pub mod consensus;
+pub mod debug;
 pub mod intercom;
 pub mod leadership;
 pub mod network;
@@ -184,7 +187,7 @@ fn start(settings: settings::start::Settings) -> Result<(), Error> {
     // * new nodes subscribing to updates (blocks, transactions)
     // * client GetBlocks/Headers ...
 
-    let tpool_data: TPool<TransactionId, SignedTransaction> = TPool::new();
+    let tpool_data: TPool<MessageId, Message> = TPool::new();
     let tpool = Arc::new(RwLock::new(tpool_data));
 
     // Validation of consensus settings should make sure that we always have
@@ -323,6 +326,12 @@ fn main() {
             });
 
             serde_yaml::to_writer(std::io::stdout(), &genesis).unwrap();
+        }
+        Command::DumpUtxos(options) => {
+            debug::dump_utxos::dump_utxos(&options.host);
+        }
+        Command::CreateStakePool(options) => {
+            debug::create_stake_pool::create_stake_pool(&options.host);
         }
     }
 }
