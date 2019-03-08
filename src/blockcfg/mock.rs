@@ -10,7 +10,14 @@ use network_core::gossip::Gossip;
 // Temporary solution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EmptyGossip(());
-impl Gossip for EmptyGossip where {}
+impl Gossip for EmptyGossip where {
+    type NodeId = poldercast::Id;
+    type Node = poldercast::Node;
+
+    fn from_nodes<I>(iter: I) -> Self {
+        unimplemented!()
+    }
+}
 
 impl property::Serialize for EmptyGossip {
     type Error = std::io::Error;
