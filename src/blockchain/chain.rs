@@ -4,6 +4,7 @@ use std::sync::{Arc, RwLock};
 use chain_core::property::{
     Block as _, BlockId as _, HasHeader as _, HasMessages as _, Settings as _, State as _,
 };
+use chain_impl_mockchain::multiverse;
 use chain_impl_mockchain::state::State;
 use chain_storage::{error as storage, memory::MemoryBlockStore, store::BlockStore};
 use chain_storage_sqlite::SQLiteBlockStore;
@@ -14,8 +15,9 @@ pub struct Blockchain<B: BlockConfig> {
     /// the storage for the overall blockchains (blocks)
     pub storage: Arc<RwLock<Box<BlockStore<Block = B::Block> + Send + Sync>>>,
 
-    // TODO use multiverse here
-    pub state: B::State,
+    pub multiverse: multiverse::Multiverse<B::BlockHash, B::State>,
+
+    pub tip: B::BlockHash,
 
     /// Incoming blocks whose parent does not exist yet. Sorted by
     /// parent hash to allow quick look up of the children of a
@@ -29,30 +31,6 @@ pub type BlockchainR<B> = Arc<RwLock<Blockchain<B>>>;
 
 // FIXME: copied from cardano-cli
 pub const LOCAL_BLOCKCHAIN_TIP_TAG: &'static str = "tip";
-
-/*
-impl State<Mockchain> {
-    pub fn new(genesis: &GenesisData) -> Self {
-        let ledger = Arc::new(RwLock::new(ledger::Ledger::new(genesis.initial_utxos())));
-
-        let settings = Arc::new(RwLock::new(setting::Settings::new()));
-
-        let leaders = leadership::genesis::GenesisLeaderSelection::new(
-            genesis.leaders().cloned().collect(),
-            ledger.clone(),
-            settings.clone(),
-            HashSet::new(), // initial_stake_pools
-            HashMap::new(), // initial_stake_keys
-        )
-        .unwrap();
-
-        State {
-            ledger,
-            settings,
-            leaders: leaders,
-        }
-    }
-}*/
 
 impl Blockchain<Mockchain> {
     pub fn new(genesis_data: GenesisData, storage_dir: &Option<std::path::PathBuf>) -> Self {
@@ -74,7 +52,9 @@ impl Blockchain<Mockchain> {
             }
         };
 
-        if let Some(tip_hash) = storage.get_tag(LOCAL_BLOCKCHAIN_TIP_TAG).unwrap() {
+        let mut multiverse = multiverse::Multiverse::new();
+
+        let tip_hash = if let Some(tip_hash) = storage.get_tag(LOCAL_BLOCKCHAIN_TIP_TAG).unwrap() {
             info!("restoring state at tip {}", tip_hash);
 
             // FIXME: should restore from serialized chain state once we have it.
@@ -85,18 +65,25 @@ impl Blockchain<Mockchain> {
                 let info = info.unwrap();
                 let block = &storage.get_block(&info.block_hash).unwrap().0;
                 state = state.apply_block(&block.header, block.messages()).unwrap();
+                assert_eq!(state.tip(), info.block_hash);
+                multiverse.add(&info.block_hash, state.clone());
             }
+
+            tip_hash
         } else {
             let block_0 = genesis_data.to_block_0();
             state = state
                 .apply_block(&block_0.header, block_0.messages())
                 .unwrap();
             storage.put_block(&block_0).unwrap();
-        }
+            multiverse.add(&block_0.id(), state);
+            block_0.id()
+        };
 
         Blockchain {
             storage: Arc::new(RwLock::new(storage)),
-            state: state,
+            multiverse,
+            tip: tip_hash,
             unconnected_blocks: BTreeMap::default(),
         }
     }
@@ -121,20 +108,26 @@ impl<B: BlockConfig> Blockchain<B> {
 
     /// Handle a block whose ancestors are on disk.
     fn handle_connected_block(&mut self, block_hash: B::BlockHash, block: B::Block) {
-        let current_tip = self.state.tip();
+        if block_hash == self.tip {
+            return;
+        }
 
-        match self.state.apply_block(&block.header(), block.messages()) {
+        let state = self.multiverse.get(&self.tip).unwrap().clone(); // FIXME
+
+        match state.apply_block(&block.header(), block.messages()) {
             Ok(state) => {
-                if block_hash != current_tip {
-                    let mut storage = self.storage.write().unwrap();
-                    storage.put_block(&block).unwrap();
-                    storage
-                        .put_tag(LOCAL_BLOCKCHAIN_TIP_TAG, &block_hash)
-                        .unwrap();
-                }
+                // FIXME: only update tip to a longer chain.
 
-                // TODO: update with the multiverse here
-                self.state = state;
+                assert_eq!(state.tip(), block_hash);
+
+                let mut storage = self.storage.write().unwrap();
+                storage.put_block(&block).unwrap();
+                storage
+                    .put_tag(LOCAL_BLOCKCHAIN_TIP_TAG, &block_hash)
+                    .unwrap();
+
+                self.multiverse.add(&block_hash, state);
+                self.tip = block_hash;
             }
             Err(error) => error!("Error with incoming block: {}", error),
         }
@@ -142,9 +135,10 @@ impl<B: BlockConfig> Blockchain<B> {
 
     /// return the current tip hash and date
     pub fn get_tip(&self) -> B::BlockHash {
-        self.state.tip()
+        self.tip.clone()
     }
 }
+
 impl<B: BlockConfig> Blockchain<B> {
     fn block_exists(&self, block_hash: &B::BlockHash) -> Result<bool, storage::Error> {
         // TODO: we assume as an invariant that if a block exists on
@@ -156,7 +150,8 @@ impl<B: BlockConfig> Blockchain<B> {
     }
 
     /// Request a missing block from the network.
-    fn sollicit_block(&mut self, _block_hash: &B::BlockHash) {
+    fn sollicit_block(&mut self, block_hash: &B::BlockHash) {
+        info!("solliciting block {} from the network", block_hash);
         //unimplemented!();
     }
 
@@ -168,123 +163,3 @@ impl<B: BlockConfig> Blockchain<B> {
         Ok(())
     }
 }
-
-/*
-FIXME: we need to restore this when possible
-
-impl Blockchain<Cardano> {
-    pub fn from_storage(genesis_data: GenesisData, storage_config: &StorageConfig) -> Self {
-        let storage = Storage::init(storage_config).unwrap();
-        let tip = tag::read_hash(&storage, &LOCAL_BLOCKCHAIN_TIP_TAG)
-            .unwrap_or(genesis_data.genesis_prev.clone());
-        let chain_state =
-            restore_chain_state(&storage, &genesis_data, &tip).expect("restoring chain state");
-        Blockchain {
-            genesis_data,
-            storage,
-            chain_state,
-            unconnected_blocks: BTreeMap::new(),
-        }
-    }
-
-    /// return the current tip hash and date
-    pub fn get_tip(&self) -> BlockHash {
-        self.chain_state.last_block.clone()
-    }
-
-    pub fn get_storage(&self) -> &Storage {
-        &self.storage
-    }
-
-    pub fn get_genesis_hash(&self) -> &BlockHash {
-        &self.genesis_data.genesis_prev
-    }
-
-    /// Handle a block whose ancestors are on disk.
-    fn handle_connected_block(&mut self, block_hash: BlockHash, block: Block) {
-        // Quick optimization: don't do anything if the incoming block
-        // is already the tip. Ideally we would bail out if the
-        // incoming block is on the tip chain, but there is no quick
-        // way to check that.
-        if block_hash != self.chain_state.last_block {
-            blob::write(
-                &self.storage,
-                block_hash.as_hash_bytes(),
-                cbor!(block).unwrap().as_ref(),
-            )
-            .expect("unable to write block to disk");
-
-            // Compute the new chain state. In the common case, the
-            // incoming block is a direct successor of the tip, so we
-            // just apply the block to our current chain
-            // state. Otherwise we use restore_chain_state() to
-            // compute the chain state from the last state snapshot on
-            // disk.
-            let new_chain_state =
-                if block.get_header().get_previous_header() == self.chain_state.last_block {
-                    let mut new_chain_state = self.chain_state.clone();
-                    match new_chain_state.verify_block(&block_hash, &block) {
-                        Ok(()) => Ok(new_chain_state),
-                        Err(err) => Err(err.into()),
-                    }
-                } else {
-                    restore_chain_state(&self.storage, &self.genesis_data, &block_hash)
-                };
-
-            match new_chain_state {
-                Ok(new_chain_state) => {
-                    assert_eq!(new_chain_state.last_block, block_hash);
-                    if new_chain_state.chain_length > self.chain_state.chain_length {
-                        info!(
-                            "switching to new tip {} ({:?}), previous length {}, new length {}",
-                            block_hash,
-                            new_chain_state.last_date,
-                            self.chain_state.chain_length,
-                            new_chain_state.chain_length
-                        );
-                        self.chain_state = new_chain_state;
-                        tag::write_hash(&self.storage, &LOCAL_BLOCKCHAIN_TIP_TAG, &block_hash);
-                    } else {
-                        info!(
-                            "discarding shorter incoming fork {} ({:?}, length {}), tip length {}",
-                            block_hash,
-                            new_chain_state.last_date,
-                            new_chain_state.chain_length,
-                            self.chain_state.chain_length
-                        );
-                    }
-                }
-                Err(err) => error!(
-                    "cannot compute chain state for incoming fork {}: {:?}",
-                    block_hash, err
-                ),
-            }
-        }
-
-        // Process previously received children of this block.
-        if let Some(children) = self.unconnected_blocks.remove(&block_hash) {
-            for (child_hash, child_block) in children {
-                info!("triggering child block {}", child_hash);
-                self.handle_connected_block(child_hash, child_block);
-            }
-        }
-    }
-
-    fn block_exists(&self, block_hash: &BlockHash) -> bool {
-        // TODO: we assume as an invariant that if a block exists on
-        // disk, its ancestors exist on disk as well. Need to make
-        // sure that this invariant is preserved everywhere
-        // (e.g. loose block GC should delete blocks in reverse
-        // order).
-        self.storage
-            .block_exists(block_hash.as_hash_bytes())
-            .unwrap_or(false)
-    }
-
-    /// Request a missing block from the network.
-    fn sollicit_block(&mut self, block_hash: &BlockHash) {
-        info!("solliciting block {} from the network", block_hash);
-        //unimplemented!();
-    }
-}
-*/

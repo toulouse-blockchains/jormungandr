@@ -64,6 +64,7 @@ use blockcfg::{
     genesis_data::ConfigGenesisData, genesis_data::GenesisData, mock::Mockchain as Cardano,
 };
 use blockchain::{Blockchain, BlockchainR};
+use chain_core::property::Settings as _;
 use chain_crypto::{
     AsymmetricKey, Curve25519_2HashDH, Ed25519, Ed25519Bip32, Ed25519Extended, FakeMMM,
 };
@@ -122,9 +123,14 @@ fn startup_info(
     _settings: &settings::start::Settings,
 ) {
     println!(
-        "k={} tip={}",
+        "k={} tip={} length={:?}",
         gd.epoch_stability_depth,
-        blockchain.get_tip()
+        blockchain.get_tip(),
+        blockchain
+            .multiverse
+            .get(&blockchain.get_tip())
+            .unwrap()
+            .chain_length()
     );
 }
 
