@@ -115,7 +115,7 @@ impl<B: BlockConfig> Blockchain<B> {
             return;
         }
 
-        let state = self.multiverse.get_from_root(&self.tip).clone(); // FIXME
+        let state = self.multiverse.get(&block.parent_id()).unwrap().clone(); // FIXME
 
         let tip_chain_length = state.chain_length();
 
