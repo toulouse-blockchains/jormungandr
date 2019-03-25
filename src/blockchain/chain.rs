@@ -17,7 +17,7 @@ pub struct Blockchain<B: BlockConfig> {
 
     pub multiverse: multiverse::Multiverse<B::BlockHash, B::State>,
 
-    pub tip: B::BlockHash,
+    pub tip: multiverse::GCRoot<B::BlockHash>,
 
     /// Incoming blocks whose parent does not exist yet. Sorted by
     /// parent hash to allow quick look up of the children of a
@@ -54,8 +54,10 @@ impl Blockchain<Mockchain> {
 
         let mut multiverse = multiverse::Multiverse::new();
 
-        let tip_hash = if let Some(tip_hash) = storage.get_tag(LOCAL_BLOCKCHAIN_TIP_TAG).unwrap() {
+        let tip = if let Some(tip_hash) = storage.get_tag(LOCAL_BLOCKCHAIN_TIP_TAG).unwrap() {
             info!("restoring state at tip {}", tip_hash);
+
+            let mut tip = None;
 
             // FIXME: should restore from serialized chain state once we have it.
             for info in storage
@@ -66,24 +68,25 @@ impl Blockchain<Mockchain> {
                 let block = &storage.get_block(&info.block_hash).unwrap().0;
                 state = state.apply_block(&block.header, block.messages()).unwrap();
                 assert_eq!(state.tip(), info.block_hash);
-                multiverse.add(&info.block_hash, state.clone());
+                tip = Some(multiverse.add(info.block_hash.clone(), state.clone()));
             }
 
-            tip_hash
+            tip.unwrap()
         } else {
             let block_0 = genesis_data.to_block_0();
             state = state
                 .apply_block(&block_0.header, block_0.messages())
                 .unwrap();
             storage.put_block(&block_0).unwrap();
-            multiverse.add(&block_0.id(), state);
-            block_0.id()
+            multiverse.add(block_0.id(), state)
         };
+
+        multiverse.gc();
 
         Blockchain {
             storage: Arc::new(RwLock::new(storage)),
             multiverse,
-            tip: tip_hash,
+            tip,
             unconnected_blocks: BTreeMap::default(),
         }
     }
@@ -108,11 +111,11 @@ impl<B: BlockConfig> Blockchain<B> {
 
     /// Handle a block whose ancestors are on disk.
     fn handle_connected_block(&mut self, block_hash: B::BlockHash, block: B::Block) {
-        if block_hash == self.tip {
+        if block_hash == *self.tip {
             return;
         }
 
-        let state = self.multiverse.get(&self.tip).unwrap().clone(); // FIXME
+        let state = self.multiverse.get_from_root(&self.tip).clone(); // FIXME
 
         let tip_chain_length = state.chain_length();
 
@@ -132,10 +135,10 @@ impl<B: BlockConfig> Blockchain<B> {
 
                 let new_chain_length = state.chain_length();
 
-                self.multiverse.add(&block_hash, state);
+                let tip = self.multiverse.add(block_hash, state);
 
                 if new_chain_length > tip_chain_length {
-                    self.tip = block_hash;
+                    self.tip = tip;
                 }
             }
             Err(error) => error!("Error with incoming block: {}", error),
