@@ -47,6 +47,21 @@ pub fn block_0_get_slot_duration(block: &Block) -> Result<std::time::Duration, B
     }
 }
 
+pub fn block_0_get_slots_per_epoch(block: &Block) -> Result<Option<usize>, Block0Error> {
+    Ok(block
+        .messages()
+        .find_map(|message| match message {
+            Message::Initial(ents) => Some(ents),
+            _ => None,
+        })
+        .ok_or(Block0Malformed::NoInitialSettings)?
+        .iter()
+        .find_map(|message| match message {
+            ConfigParam::SlotsPerEpoch(slots) => Some(*slots as usize),
+            _ => None,
+        }))
+}
+
 pub fn block_0_get_start_time(block: &Block) -> Result<std::time::SystemTime, Block0Error> {
     let ents = block_0_get_initial(block)?;
 

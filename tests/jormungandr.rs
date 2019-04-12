@@ -2,8 +2,6 @@ extern crate assert_cmd;
 extern crate galvanic_test;
 extern crate mktemp;
 
-use galvanic_test::test_suite;
-
 #[cfg(feature = "integration-test")]
 test_suite! {
 
