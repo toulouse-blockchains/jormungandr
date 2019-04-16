@@ -27,7 +27,7 @@ impl Leaderships {
         anchors
             .entry(block_0_header.date().epoch)
             .or_insert(HashSet::new())
-            .insert(*gc_root);
+            .insert(gc_root.get_hash());
 
         Leaderships {
             multiverse: multiverse,
@@ -57,7 +57,7 @@ impl Leaderships {
         self.anchors
             .entry(epoch)
             .or_insert(HashSet::new())
-            .insert(*gc_root);
+            .insert(gc_root.get_hash());
         gc_root
     }
 }

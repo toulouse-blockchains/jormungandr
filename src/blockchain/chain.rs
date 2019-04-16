@@ -143,11 +143,11 @@ impl Blockchain {
 
     /// return the current tip hash and date
     pub fn get_tip(&self) -> HeaderHash {
-        self.tip.clone()
+        self.tip.get_hash()
     }
 
     pub fn get_block_tip(&self) -> Result<(Block, BlockInfo<HeaderHash>), storage::Error> {
-        self.get_block(&self.tip)
+        self.get_block(&self.tip.get_hash())
     }
 
     pub fn put_block(&mut self, block: &Block) -> Result<(), storage::Error> {

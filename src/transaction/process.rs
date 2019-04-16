@@ -30,7 +30,10 @@ pub fn handle_input(
         TransactionMsg::SendTransaction(txs) => {
             let mut tpool = tpool.write().unwrap();
             let blockchain = blockchain.lock_read();
-            let chain_state = blockchain.multiverse.get(&blockchain.tip).unwrap();
+            let chain_state = blockchain
+                .multiverse
+                .get(&blockchain.tip.get_hash())
+                .unwrap();
             let parameters = chain_state.get_ledger_parameters();
 
             // this will test the transaction is valid within the current
