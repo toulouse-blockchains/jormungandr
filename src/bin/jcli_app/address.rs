@@ -1,5 +1,5 @@
-use bech32::{Bech32, ToBase32};
 use chain_addr::{AddressReadable, Discrimination, Kind};
+use chain_crypto::bech32::Bech32 as _;
 use chain_crypto::{AsymmetricKey, Ed25519Extended, PublicKey};
 use jcli_app::utils::key_parser::parse_pub_key;
 use structopt::StructOpt;
@@ -80,11 +80,11 @@ fn address_info(address: &AddressReadable) {
     }
 
     match kind {
-        Kind::Single(single) => println!("public key: {}", print_pub_key(single)),
-        Kind::Account(account) => println!("account: {}", print_pub_key(account)),
+        Kind::Single(single) => println!("public key: {}", single.to_bech32_str()),
+        Kind::Account(account) => println!("account: {}", account.to_bech32_str()),
         Kind::Group(pubk, groupk) => {
-            println!("public key: {}", print_pub_key(pubk));
-            println!("group key:  {}", print_pub_key(groupk));
+            println!("public key: {}", pubk.to_bech32_str());
+            println!("group key:  {}", groupk.to_bech32_str());
         }
     }
 }
@@ -133,9 +133,4 @@ where
     let discrimination = mk_discrimination(testing);
     let kind = f(s, d);
     mk_address(discrimination, kind);
-}
-
-fn print_pub_key<A: AsymmetricKey>(pk: PublicKey<A>) -> Bech32 {
-    let hrp = A::PUBLIC_BECH32_HRP.to_string();
-    Bech32::new(hrp, pk.to_base32()).unwrap()
 }
