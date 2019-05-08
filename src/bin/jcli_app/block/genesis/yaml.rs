@@ -40,8 +40,7 @@ pub struct Genesis {
 
 #[derive(Clone, Serialize, Deserialize)]
 struct BlockchainConfiguration {
-    #[serde(with = "serde::time")]
-    block0_date: SystemTime,
+    block0_date: u64,
     #[serde(with = "serde::as_string")]
     discrimination: Discrimination,
     #[serde(with = "serde::as_string")]
@@ -290,9 +289,9 @@ impl BlockchainConfiguration {
 
         for ent in ents.iter() {
             match ent {
-                ConfigParam::Block0Date(param) => block0_date
-                    .replace(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(param.0))
-                    .map(|_| "Block0Date"),
+                ConfigParam::Block0Date(param) => {
+                    block0_date.replace(param.0).map(|_| "Block0Date")
+                }
                 ConfigParam::ConsensusVersion(param) => {
                     block0_consensus.replace(*param).map(|_| "ConsensusVersion")
                 }
@@ -352,12 +351,7 @@ impl BlockchainConfiguration {
             consensus_genesis_praos_param_f,
         } = self;
         let mut initial_ents = InitialEnts::new();
-        initial_ents.push(ConfigParam::Block0Date(Block0Date(
-            block0_date
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-        )));
+        initial_ents.push(ConfigParam::Block0Date(Block0Date(block0_date)));
         initial_ents.push(ConfigParam::Discrimination(discrimination));
         initial_ents.push(ConfigParam::ConsensusVersion(block0_consensus));
         if let Some(slots_per_epoch) = slots_per_epoch {
