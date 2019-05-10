@@ -33,7 +33,7 @@ pub fn test_utxo_transation_with_more_than_one_witness_per_input_is_rejected() {
         .assert_make_witness(&witness1)
         .assert_add_witness(&witness1)
         .assert_make_witness(&witness2)
-        .assert_add_witness_fail(&witness2, "cannot add anymore witnesses");
+        .assert_add_witness_fail(&witness2, "Too many witnesses");
 }
 
 #[test]

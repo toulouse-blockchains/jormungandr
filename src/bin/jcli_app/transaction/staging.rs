@@ -2,9 +2,12 @@ use chain_addr::Address;
 use chain_impl_mockchain::{
     self as chain,
     fee::FeeAlgorithm,
+    message::Message,
     transaction::{NoExtra, Transaction},
     value::Value,
 };
+use jcli_app::transaction::{common, Error};
+use jcli_app::utils::error::CustomErrorFiller;
 use jcli_app::utils::io;
 use jormungandr_utils::serde;
 use serde::{Deserialize, Serialize};
@@ -49,21 +52,6 @@ pub struct Staging {
     witnesses: Vec<Witness>,
 }
 
-custom_error! {pub StagingError
-    CannotLoad { source: bincode::Error } = "cannot load encoded staging transaction",
-    CannotAddInput { kind: StagingKind } = "cannot add input in the {kind} transaction",
-    CannotAddOutput { kind: StagingKind } = "cannot add output in the {kind} transaction",
-    CannotAddWitness { kind: StagingKind } = "cannot add witness in the {kind} transaction",
-    CannotAddWitnessTooManyWitnesses = "cannot add anymore witnesses",
-    CannotFinalize { kind: StagingKind } = "cannot finalize {kind} transaction",
-    CannotSeal { kind: StagingKind } = "cannot seal {kind} transaction",
-    CannotSealNotEnoughWitnesses = "cannot seal, not enough witnesses",
-    CannotSealFinalizerError { error: chain::txbuilder::BuildError } = "cannot seal: {error}",
-    CannotFinalizeTransaction { source: chain::txbuilder::Error } = "Cannot finalize the transaction",
-    CannotGetMessage { kind: StagingKind } = "cannot get message from {kind} transaction",
-    CannotGetMessageFinalizerError { error: chain::txbuilder::BuildError } = "cannot get message from transaction: {error}",
-}
-
 impl std::fmt::Display for StagingKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -84,19 +72,31 @@ impl Staging {
         }
     }
 
-    pub fn load<P: AsRef<Path>>(path: &Option<P>) -> Result<Self, StagingError> {
-        let mut file = io::open_file_read(path).unwrap();
-        Ok(bincode::deserialize_from(&mut file)?)
+    pub fn load<P: AsRef<Path>>(path: &Option<P>) -> Result<Self, Error> {
+        let file = io::open_file_read(path).map_err(|source| Error::StagingFileOpenFailed {
+            source,
+            path: common::path_to_path_buf(path),
+        })?;
+        bincode::deserialize_from(file).map_err(|source| Error::StagingFileReadFailed {
+            source,
+            path: common::path_to_path_buf(path),
+        })
     }
 
-    pub fn store<P: AsRef<Path>>(&self, path: &Option<P>) -> Result<(), StagingError> {
-        let file = io::open_file_write(path).unwrap();
-        Ok(bincode::serialize_into(file, self)?)
+    pub fn store<P: AsRef<Path>>(&self, path: &Option<P>) -> Result<(), Error> {
+        let file = io::open_file_write(path).map_err(|source| Error::StagingFileOpenFailed {
+            source,
+            path: common::path_to_path_buf(path),
+        })?;
+        bincode::serialize_into(file, self).map_err(|source| Error::StagingFileWriteFailed {
+            source,
+            path: common::path_to_path_buf(path),
+        })
     }
 
-    pub fn add_input(&mut self, input: chain::transaction::Input) -> Result<(), StagingError> {
+    pub fn add_input(&mut self, input: chain::transaction::Input) -> Result<(), Error> {
         if self.kind != StagingKind::Balancing {
-            return Err(StagingError::CannotAddInput { kind: self.kind });
+            return Err(Error::TxKindToAddInputInvalid { kind: self.kind });
         }
 
         Ok(self.inputs.push(Input {
@@ -106,12 +106,9 @@ impl Staging {
         }))
     }
 
-    pub fn add_output(
-        &mut self,
-        output: chain::transaction::Output<Address>,
-    ) -> Result<(), StagingError> {
+    pub fn add_output(&mut self, output: chain::transaction::Output<Address>) -> Result<(), Error> {
         if self.kind != StagingKind::Balancing {
-            return Err(StagingError::CannotAddOutput { kind: self.kind });
+            return Err(Error::TxKindToAddOutputInvalid { kind: self.kind });
         }
 
         Ok(self.outputs.push(Output {
@@ -120,16 +117,16 @@ impl Staging {
         }))
     }
 
-    pub fn add_witness(
-        &mut self,
-        witness: chain::transaction::Witness,
-    ) -> Result<(), StagingError> {
+    pub fn add_witness(&mut self, witness: chain::transaction::Witness) -> Result<(), Error> {
         if self.kind != StagingKind::Finalizing {
-            return Err(StagingError::CannotAddWitness { kind: self.kind });
+            return Err(Error::TxKindToAddWitnessInvalid { kind: self.kind });
         }
 
         if self.inputs.len() <= self.witnesses.len() {
-            return Err(StagingError::CannotAddWitnessTooManyWitnesses);
+            return Err(Error::TooManyWitnessesToAddWitness {
+                actual: self.witnesses.len(),
+                max: self.inputs.len(),
+            });
         }
 
         Ok(self.witnesses.push(Witness { witness }))
@@ -147,12 +144,12 @@ impl Staging {
         &mut self,
         fee_algorithm: FA,
         output_policy: chain::txbuilder::OutputPolicy,
-    ) -> Result<chain::transaction::Balance, StagingError>
+    ) -> Result<chain::transaction::Balance, Error>
     where
         FA: FeeAlgorithm<Transaction<Address, NoExtra>>,
     {
         if self.kind != StagingKind::Balancing {
-            return Err(StagingError::CannotFinalize { kind: self.kind });
+            return Err(Error::TxKindToFinalizeInvalid { kind: self.kind });
         }
         let builder = self.builder();
 
@@ -181,34 +178,38 @@ impl Staging {
         Ok(balance)
     }
 
-    pub fn seal(&mut self) -> Result<(), StagingError> {
+    pub fn seal(&mut self) -> Result<(), Error> {
         if self.kind != StagingKind::Finalizing {
-            return Err(StagingError::CannotSeal { kind: self.kind });
+            return Err(Error::TxKindToSealInvalid { kind: self.kind });
         }
 
         if self.inputs.len() != self.witnesses.len() {
-            return Err(StagingError::CannotSealNotEnoughWitnesses);
+            return Err(Error::WitnessCountToSealInvalid {
+                actual: self.witnesses.len(),
+                expected: self.inputs.len(),
+            });
         }
 
         Ok(self.kind = StagingKind::Sealed)
     }
 
-    pub fn message(&self) -> Result<chain::message::Message, StagingError> {
+    pub fn message(&self) -> Result<Message, Error> {
         if self.kind != StagingKind::Sealed {
-            return Err(StagingError::CannotGetMessage { kind: self.kind });
+            Err(Error::TxKindToGetMessageInvalid { kind: self.kind })?
         }
 
         let transaction = self.finalizer()?;
 
         let result = transaction
             .build()
-            .map_err(|error| StagingError::CannotGetMessageFinalizerError { error })?;
+            .map_err(|source| Error::GeneratedTxBuildingFailed {
+                source,
+                filler: CustomErrorFiller,
+            })?;
 
         match result {
-            chain::txbuilder::GeneratedTransaction::Type1(auth) => {
-                Ok(chain::message::Message::Transaction(auth))
-            }
-            _ => unreachable!(),
+            chain::txbuilder::GeneratedTransaction::Type1(auth) => Ok(Message::Transaction(auth)),
+            _ => Err(Error::GeneratedTxTypeUnexpected),
         }
     }
 
@@ -228,14 +229,17 @@ impl Staging {
         chain::txbuilder::TransactionBuilder::from(self.transaction())
     }
 
-    pub fn finalizer(&self) -> Result<chain::txbuilder::TransactionFinalizer, StagingError> {
+    pub fn finalizer(&self) -> Result<chain::txbuilder::TransactionFinalizer, Error> {
         let transaction = self.transaction();
         let mut finalizer = chain::txbuilder::TransactionFinalizer::new_trans(transaction);
 
         for (index, witness) in self.witnesses.iter().enumerate() {
             finalizer
                 .set_witness(index, witness.witness.clone())
-                .map_err(|error| StagingError::CannotSealFinalizerError { error })?;
+                .map_err(|source| Error::AddingWitnessToFinalizedTxFailed {
+                    source,
+                    filler: CustomErrorFiller,
+                })?;
         }
 
         Ok(finalizer)

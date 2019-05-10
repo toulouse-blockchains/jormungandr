@@ -2,11 +2,9 @@ use chain_impl_mockchain::{
     transaction::{Input, InputEnum, TransactionId, TransactionIndex, UtxoPointer},
     value::Value,
 };
-use jcli_app::transaction::{common, staging::StagingError};
+use jcli_app::transaction::{common, Error};
 use jormungandr_utils::structopt;
 use structopt::StructOpt;
-
-pub type AddInputError = StagingError;
 
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
@@ -28,7 +26,7 @@ pub struct AddInput {
 }
 
 impl AddInput {
-    pub fn exec(self) -> Result<(), AddInputError> {
+    pub fn exec(self) -> Result<(), Error> {
         let mut transaction = self.common.load()?;
 
         transaction.add_input(Input::from_enum(InputEnum::UtxoInput(UtxoPointer {
@@ -37,6 +35,7 @@ impl AddInput {
             value: self.value,
         })))?;
 
-        self.common.store(&transaction)
+        self.common.store(&transaction)?;
+        Ok(())
     }
 }
