@@ -1,4 +1,7 @@
-use crate::{network::p2p_topology::NodeId, settings::logging::LogFormat};
+use crate::{
+    network::p2p_topology::NodeId,
+    settings::logging::{LogFormat, LogSettings},
+};
 use poldercast;
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 use std::path::PathBuf;
@@ -17,8 +20,8 @@ pub struct Config {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ConfigLogSettings {
-    pub verbosity: Option<u8>,
-    pub format: Option<LogFormat>,
+    pub verbosity: u8,
+    pub format: LogFormat,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

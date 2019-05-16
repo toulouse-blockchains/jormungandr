@@ -90,25 +90,17 @@ impl Settings {
 }
 
 fn generate_log_settings(command_arguments: &CommandLine, config: &config::Config) -> LogSettings {
-    let level = if command_arguments.verbose == 0 {
-        match config.logger {
-            Some(ConfigLogSettings {
-                verbosity: Some(v),
-                format: _,
-            }) => v.clone(),
-            _ => 0,
-        }
-    } else {
-        command_arguments.verbose
+    let level = match (command_arguments.verbose, &config.logger) {
+        (0, Some(ConfigLogSettings { verbosity, .. })) => *verbosity,
+        (verbosity, _) => verbosity,
     };
-    LogSettings {
-        verbosity: match level {
-            0 => slog::Level::Info,
-            1 => slog::Level::Debug,
-            _ => slog::Level::Trace,
-        },
-        format: command_arguments.log_format.clone(),
-    }
+    let verbosity = match level {
+        0 => slog::Level::Info,
+        1 => slog::Level::Debug,
+        _ => slog::Level::Trace,
+    };
+    let format = command_arguments.log_format.clone();
+    LogSettings { verbosity, format }
 }
 
 fn generate_network(
