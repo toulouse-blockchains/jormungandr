@@ -62,6 +62,18 @@ pub struct TrustedPeer {
     pub id: NodeId,
 }
 
+impl<'a> Into<LogSettings> for &'a ConfigLogSettings {
+    fn into(self) -> LogSettings {
+        let verbosity = match self.verbosity {
+            0 => slog::Level::Info,
+            1 => slog::Level::Debug,
+            _ => slog::Level::Trace,
+        };
+        let format = self.format.clone();
+        LogSettings { verbosity, format }
+    }
+}
+
 impl Address {
     pub fn to_socketaddr(&self) -> Option<SocketAddr> {
         self.0.to_socketaddr()
