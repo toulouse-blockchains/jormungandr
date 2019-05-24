@@ -1,11 +1,13 @@
 use crate::{
     network::p2p::topology::{NodeId, NEW_BLOCKS_TOPIC, NEW_MESSAGES_TOPIC},
-    settings::logging::LogOutput,
+    settings::logging::{LogOutput, LogSettings},
 };
-
 use poldercast;
-use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
-
+use serde::{
+    de::{Error as _, Visitor},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
+use slog::Level;
 use std::{collections::BTreeMap, fmt, net::SocketAddr, path::PathBuf};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -14,15 +16,17 @@ pub struct Config {
     pub legacy_peers: Option<Vec<SocketAddr>>,
     pub grpc_peers: Option<Vec<SocketAddr>>,
     pub storage: Option<PathBuf>,
-    pub logger: Option<ConfigLogSettings>,
+    #[serde(default)]
+    pub logger: Vec<ConfigLogSettings>,
     pub rest: Option<Rest>,
     pub peer_2_peer: P2pConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ConfigLogSettings {
-    pub verbosity: Option<u8>,
-    pub output: Option<LogOutput>,
+    #[serde(with = "verbosity_level_serde")]
+    verbosity: Level,
+    output: LogOutput,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -61,6 +65,34 @@ pub struct InterestLevel(pub poldercast::InterestLevel);
 pub struct TrustedPeer {
     pub address: Address,
     pub id: NodeId,
+}
+
+mod verbosity_level_serde {
+    use super::*;
+
+    pub fn serialize<S: Serializer>(level: &Level, serializer: S) -> Result<S::Ok, S::Error> {
+        level.as_str().serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Level, D::Error> {
+        String::deserialize(deserializer)?.parse().map_err(|_| {
+            let valid_levels = (0..100)
+                .filter_map(Level::from_usize)
+                .map(|level| level.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            D::Error::custom(format!("Invalid value, expected one of {}", valid_levels))
+        })
+    }
+}
+
+impl<'a> Into<LogSettings> for &'a ConfigLogSettings {
+    fn into(self) -> LogSettings {
+        LogSettings {
+            verbosity: self.verbosity,
+            output: self.output.clone(),
+        }
+    }
 }
 
 impl Address {
