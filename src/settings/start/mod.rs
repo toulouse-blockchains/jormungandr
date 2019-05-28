@@ -43,6 +43,17 @@ impl RawSettings {
     }
 
     pub fn to_logger(&self) -> Result<Logger, logging::Error> {
+        let mut log_settings = self
+            .config
+            .log_settings()
+            .chain(self.command_line.log_settings())
+            .peekable();
+        let default_logger = match log_settings.peek() {
+            Some(_) => None,
+            None => Some(self.command_line.default_log_settings()),
+        };
+        let log_settings_non_empty = log_settings.chain(default_logger);
+
         let level = if self.command_line.verbose == 0 {
             match self.config.logger {
                 Some(ConfigLogSettings {

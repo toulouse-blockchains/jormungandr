@@ -17,7 +17,7 @@ pub struct Config {
     pub grpc_peers: Option<Vec<SocketAddr>>,
     pub storage: Option<PathBuf>,
     #[serde(default)]
-    pub logger: Vec<ConfigLogSettings>,
+    loggers: Vec<ConfigLogSettings>,
     pub rest: Option<Rest>,
     pub peer_2_peer: P2pConfig,
 }
@@ -65,6 +65,12 @@ pub struct InterestLevel(pub poldercast::InterestLevel);
 pub struct TrustedPeer {
     pub address: Address,
     pub id: NodeId,
+}
+
+impl Config {
+    pub fn log_settings<'a>(&'a self) -> impl Iterator<Item = LogSettings> + 'a {
+        self.loggers.iter().map(Into::into)
+    }
 }
 
 mod verbosity_level_serde {

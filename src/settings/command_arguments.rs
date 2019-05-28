@@ -1,8 +1,8 @@
+use crate::blockcfg::HeaderHash;
+use crate::settings::logging::{LogOutput, LogSettings};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use structopt::StructOpt;
-
-use crate::{blockcfg::HeaderHash, settings::logging::LogOutput};
 
 #[derive(StructOpt, Debug)]
 pub struct StartArguments {
@@ -67,12 +67,12 @@ pub struct CommandLine {
     /// activate the verbosity, the more occurrences the more verbose.
     /// (-v, -vv, -vvv)
     #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
-    pub verbose: u8,
+    verbose: u8,
 
     /// Set format of the log emitted. Can be "stderr", "stderr_json", "syslog" (unix only)
     /// or "journald" (linux with systemd only, must be enabled during compilation)
-    #[structopt(long = "log-output", parse(try_from_str), default_value = "stderr")]
-    pub log_output: LogOutput,
+    #[structopt(long = "log-output", parse(try_from_str))]
+    log_output: Option<LogOutput>,
 
     #[structopt(flatten)]
     pub start_arguments: StartArguments,
@@ -87,5 +87,27 @@ impl CommandLine {
     ///
     pub fn load() -> Self {
         Self::from_args()
+    }
+
+    pub fn log_settings(&self) -> Option<LogSettings> {
+        self.log_output.clone().map(|output| LogSettings {
+            verbosity: self.verbosity(),
+            output,
+        })
+    }
+
+    pub fn default_log_settings(&self) -> LogSettings {
+        LogSettings {
+            verbosity: self.verbosity(),
+            output: LogOutput::Stderr,
+        }
+    }
+
+    fn verbosity(&self) -> slog::Level {
+        match self.verbose {
+            0 => slog::Level::Info,
+            1 => slog::Level::Debug,
+            _ => slog::Level::Trace,
+        }
     }
 }
