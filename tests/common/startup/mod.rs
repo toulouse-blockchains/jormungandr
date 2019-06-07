@@ -14,7 +14,7 @@ use common::jormungandr::starter;
 use std::path::PathBuf;
 
 use common::jcli_wrapper;
-use common::jcli_wrapper::Discrimination;
+use common::jcli_wrapper::{jcli_transaction_wrapper::JCLITransactionWrapper, Discrimination};
 
 pub use self::configuration_builder::ConfigurationBuilder;
 
@@ -85,6 +85,14 @@ pub fn create_new_delegation_address() -> Delegation {
     utxo_with_delegation
 }
 
+pub fn create_new_utxo_addresses(count: u32) -> Vec<Utxo> {
+    let mut utxo_addresses = vec![];
+    for _i in 0..count {
+        utxo_addresses.push(self::create_new_utxo_address());
+    }
+    utxo_addresses
+}
+
 pub fn get_utxo_for_address<T: AddressDataProvider>(
     utxo_address: &T,
     jormungandr_rest_address: &str,
@@ -102,4 +110,15 @@ pub fn get_utxo_for_address<T: AddressDataProvider>(
 
 pub fn assert_node_is_up(address: &str) {
     jcli_wrapper::assert_rest_stats(&address);
+}
+
+pub fn send_transaction_and_get_new_utxo(
+    transaction_builder: &JCLITransactionWrapper,
+    host: &str,
+) -> Vec<UtxoData> {
+    let transaction_id = transaction_builder.get_transaction_id();
+    let transaction_message = transaction_builder.assert_transaction_to_message();
+
+    jcli_wrapper::assert_transaction_in_block(&transaction_message, &transaction_id, &host);
+    jcli_wrapper::assert_rest_utxo_get(&host)
 }

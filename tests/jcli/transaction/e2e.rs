@@ -1,9 +1,11 @@
 #![cfg(feature = "integration-test")]
 
 use common::configuration::genesis_model::Fund;
-use common::jcli_wrapper;
+use common::data::address::{AddressDataProvider, Utxo};
 use common::jcli_wrapper::jcli_transaction_wrapper::JCLITransactionWrapper;
 use common::startup;
+
+use common::jcli_wrapper;
 
 const FAKE_INPUT_TRANSACTION_ID: &str =
     "19c9852ca0a68f15d0f7de5d1a26acd67a3a3251640c6066bdb91d22e2000193";
@@ -497,4 +499,72 @@ pub fn test_input_with_no_spending_utxo_is_accepted_by_node() {
     )
     .assert_transaction_to_message();
     jcli_wrapper::assert_transaction_post_accepted(&transaction_message, &jormungandr_rest_address);
+}
+
+#[test]
+pub fn test_transaction_with_45_inputs_and_3_outputs_is_accpted_by_node() {
+    let faucet = startup::create_new_utxo_address();
+
+    let amount = 45;
+    let senders = startup::create_new_utxo_addresses(45);
+    let recievers = startup::create_new_utxo_addresses(3);
+
+    let mut config = startup::ConfigurationBuilder::new()
+        .with_funds(vec![Fund {
+            address: faucet.address.clone(),
+            value: amount,
+        }])
+        .build();
+
+    let jormungandr_rest_address = config.get_node_address();
+    let _jormungandr = startup::start_jormungandr_node_as_leader(&mut config);
+    let utxo = startup::get_utxo_for_address(&faucet, &jormungandr_rest_address);
+
+    let mut transaction_wrapper =
+        JCLITransactionWrapper::new_transaction(&config.genesis_block_hash);
+
+    transaction_wrapper
+        .assert_add_input(&utxo.in_txid, &0, &45)
+        .assert_add_outputs(
+            senders
+                .iter()
+                .map(|ref x| x.address.clone())
+                .collect::<Vec<_>>(),
+            &1,
+        )
+        .assert_finalize()
+        .seal_with_witness_deafult(&faucet.private_key, "utxo");
+
+    let utxos =
+        startup::send_transaction_and_get_new_utxo(&transaction_wrapper, &jormungandr_rest_address);
+
+    let mut transaction_wrapper =
+        JCLITransactionWrapper::new_transaction(&config.genesis_block_hash);
+
+    transaction_wrapper
+        .assert_add_input_from_utxos(utxos)
+        .assert_add_outputs(
+            recievers
+                .iter()
+                .map(|ref x| x.address.clone())
+                .collect::<Vec<_>>(),
+            &15,
+        )
+        .assert_finalize()
+        .seal_with_witnesses_default(
+            senders
+                .iter()
+                .map(|ref x| x.private_key.clone())
+                .collect::<Vec<_>>(),
+            "utxo",
+        );
+
+    let utxos =
+        startup::send_transaction_and_get_new_utxo(&transaction_wrapper, &jormungandr_rest_address);
+
+    assert_eq!(utxos.len(), 3);
+    for reciever in recievers {
+        let utxo = startup::get_utxo_for_address(&reciever, &jormungandr_rest_address);
+        assert_eq!(utxo.out_value, 15);
+    }
 }

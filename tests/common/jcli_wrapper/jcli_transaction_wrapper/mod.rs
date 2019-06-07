@@ -141,6 +141,16 @@ impl JCLITransactionWrapper {
         self.assert_add_input(&utxo.in_txid, &utxo.in_idx, &utxo.out_value)
     }
 
+    pub fn assert_add_input_from_utxos<'a>(
+        &'a mut self,
+        utxos: Vec<UtxoData>,
+    ) -> &'a mut JCLITransactionWrapper {
+        for utxo in utxos {
+            self.assert_add_input(&utxo.in_txid, &utxo.in_idx, &utxo.out_value);
+        }
+        self
+    }
+
     pub fn assert_add_account<'a>(
         &'a mut self,
         account_addr: &str,
@@ -179,6 +189,21 @@ impl JCLITransactionWrapper {
                 .get_add_output_command(&addr, &amount, &self.staging_file_path),
         );
         process_assert::assert_process_exited_successfully(output);
+        self
+    }
+
+    pub fn assert_add_outputs<'a>(
+        &'a mut self,
+        addresses: Vec<String>,
+        amount: &i32,
+    ) -> &'a mut JCLITransactionWrapper {
+        for addr in addresses.iter() {
+            let output = process_utils::run_process_and_get_output(
+                self.commands
+                    .get_add_output_command(&addr, &amount, &self.staging_file_path),
+            );
+            process_assert::assert_process_exited_successfully(output);
+        }
         self
     }
 
@@ -225,6 +250,20 @@ impl JCLITransactionWrapper {
     ) -> &'a mut JCLITransactionWrapper {
         let witness = self.create_witness_from_key(&private_key, &transaction_type);
         self.seal_with_witness(&witness);
+        self
+    }
+
+    pub fn seal_with_witnesses_default<'a>(
+        &'a mut self,
+        private_keys: Vec<String>,
+        transaction_type: &str,
+    ) -> &'a mut JCLITransactionWrapper {
+        private_keys.iter().for_each(|key| {
+            let witness = self.create_witness_from_key(key, &transaction_type);
+            self.assert_make_witness(&witness);
+            self.assert_add_witness(&witness);
+        });
+        self.assert_seal();
         self
     }
 
