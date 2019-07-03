@@ -475,6 +475,24 @@ impl Peers {
         }
     }
 
+    pub fn fetch_blocks(&self, hashes: Vec<HeaderHash>) {
+        let mut map = self.mutex.lock().unwrap();
+        if let Some((node_id, comms)) = map.next_peer_for_block_fetch() {
+            debug!(self.logger, "fetching blocks from {}", node_id);
+            comms
+                .block_solicitations
+                .try_send(hashes)
+                .unwrap_or_else(|e| {
+                    warn!(
+                        self.logger,
+                        "block solicitation from {} failed: {:?}", node_id, e
+                    );
+                });
+        } else {
+            warn!(self.logger, "no peers to fetch blocks from");
+        }
+    }
+
     pub fn solicit_blocks(&self, node_id: topology::NodeId, hashes: Vec<HeaderHash>) {
         let mut map = self.mutex.lock().unwrap();
         match map.peer_comms(node_id) {

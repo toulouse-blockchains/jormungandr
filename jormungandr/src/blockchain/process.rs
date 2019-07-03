@@ -138,9 +138,12 @@ pub fn handle_input(
                 BlockHeaderTriage::ProcessBlockToState => {
                     info!(logger, "Block announcement is interesting, fetch block");
                     network_msg_box
-                        .try_send(NetworkMsg::GetBlocks(node_id, vec![header.id()]))
+                        .try_send(NetworkMsg::GetNextBlock(node_id, header.id()))
                         .unwrap_or_else(|err| {
-                            error!(logger, "cannot send GetBlocks request to network: {}", err)
+                            error!(
+                                logger,
+                                "cannot send GetNextBlock request to network: {}", err
+                            )
                         });
                 }
             }
@@ -151,10 +154,7 @@ pub fn handle_input(
                     network_msg_box
                         .try_send(NetworkMsg::GetBlocks(block_ids))
                         .unwrap_or_else(|err| {
-                            error!(
-                                logger,
-                                "cannot send PullHeaders request to network: {}", err
-                            )
+                            error!(logger, "cannot send GetBlocks request to network: {}", err)
                         });
                 },
             );

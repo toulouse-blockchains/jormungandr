@@ -210,8 +210,12 @@ fn handle_network_input(
             handle_propagation_msg(msg, state.clone(), channels.clone());
             Ok(())
         }
-        NetworkMsg::GetBlocks(node_id, block_ids) => {
-            state.peers.solicit_blocks(node_id, block_ids);
+        NetworkMsg::GetBlocks(block_ids) => {
+            state.peers.fetch_blocks(block_ids);
+            Ok(())
+        }
+        NetworkMsg::GetNextBlock(node_id, block_id) => {
+            state.peers.solicit_blocks(node_id, vec![block_id]);
             Ok(())
         }
         NetworkMsg::PullHeaders { node_id, from, to } => {

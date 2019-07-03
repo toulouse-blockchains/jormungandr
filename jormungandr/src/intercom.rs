@@ -318,7 +318,8 @@ pub enum PropagateMsg {
 #[derive(Clone, Debug)]
 pub enum NetworkMsg {
     Propagate(PropagateMsg),
-    GetBlocks(NodeId, Vec<HeaderHash>),
+    GetBlocks(Vec<HeaderHash>),
+    GetNextBlock(NodeId, HeaderHash),
     PullHeaders {
         node_id: NodeId,
         from: Vec<HeaderHash>,
